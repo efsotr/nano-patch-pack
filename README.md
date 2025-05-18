@@ -7,6 +7,8 @@ Just a few lines to combine 🤗 **Transformers**, **Flash Attention 2**, and `t
 All of them now support **sequence packing** — removing unnecessary padding by packing a batch of tokens into one contiguous sequence.
 But few frameworks make it easy to actually use.
 
+![](seq_pack.png)
+
 **Not anymore!** With a tiny `patch.py`, you can enable packing and compiler-level optimization in just **two lines** — and seamlessly plug it into **any framework built on Transformers** 💡
 
 ```python
