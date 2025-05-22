@@ -73,12 +73,18 @@ def patch(model):
         enable_nonsac()
     except Exception as e:
         print("enable error", repr(e), flush=True)
+
+    # disable unnecessary kv cache
     if model.config.use_cache:
         warn("model use_cache is not False")
+    model.config.use_cache = False
+
+    # enable pack
     if model.config._attn_implementation != "flash_attention_2":
         warn("model attn_implementation is not flash_attention_2")
-    model.config.use_cache = False
     model.config._attn_implementation = "flash_attention_2"
     model.model.forward = wrap(model.model.forward)
+
+    # enable torch.compile
     for layer in model.model.layers:
         layer.forward = torch.compile(layer.forward, dynamic=True)
