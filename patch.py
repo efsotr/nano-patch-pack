@@ -3,20 +3,24 @@ from warnings import warn
 
 def wrap(fn):
     
-    def wrapped_fn(input_ids, attention_mask, position_ids=None, **kwargs):
+    def wrapped_fn(input_ids=None, attention_mask=None, position_ids=None, inputs_embeds=None, **kwargs):
         assert attention_mask is not None
         assert not kwargs.get("output_hidden_states", False)
         
+        # prepare shape and attention mask
+        B, L = attention_mask.shape
         attention_mask = attention_mask.bool()
 
-        # prepare shape
-        B, L = input_ids.shape
-        input_ids = input_ids[attention_mask][None] # (1, T)
+        # prepare input
+        if input_ids is None:
+            input_ids = input_ids[attention_mask][None] # (1, T)
+        else:
+            inputs_embeds = inputs_embeds[attention_mask][None] # (1, T, D)
 
         # prepare position ids
         if position_ids is None:
-            position_ids = torch.arange(0, L, device=attention_mask.device)[None].repeat(B, 1)
-        position_ids = position_ids[attention_mask][None]
+            position_ids = torch.arange(0, L, device=attention_mask.device)[None]
+        position_ids = position_ids.expand(B, L).clone()[attention_mask][None]
 
         indices = torch.nonzero(attention_mask.view(-1), as_tuple=True)[0]
 
@@ -30,7 +34,12 @@ def wrap(fn):
         kwargs["max_length_q"] = max_seqlen_in_batch
         kwargs["max_length_k"] = max_seqlen_in_batch
 
-        output = fn(input_ids, attention_mask, position_ids, **kwargs) # original forward
+        # original forward
+        output = fn(input_ids=input_ids, 
+                    attention_mask=attention_mask, 
+                    position_ids=position_ids, 
+                    inputs_embeds=inputs_embeds, 
+                    **kwargs) 
 
         # restore original shape 
         last_hidden_state = output.last_hidden_state # (1, T, H)
@@ -69,11 +78,6 @@ def enable_nonsac(enable_remove_add=True):
             partitioners.get_default_op_list = remove_add(partitioners.get_default_op_list)
 
 def patch(model):
-    try:
-        enable_nonsac()
-    except Exception as e:
-        print("enable error", repr(e), flush=True)
-
     # disable unnecessary kv cache
     if model.config.use_cache:
         warn("model use_cache is not False")
@@ -86,5 +90,9 @@ def patch(model):
     model.model.forward = wrap(model.model.forward)
 
     # enable torch.compile
+    try:
+        enable_nonsac()
+    except Exception as e:
+        print("enable error", repr(e), flush=True)
     for layer in model.model.layers:
         layer.forward = torch.compile(layer.forward, dynamic=True)
