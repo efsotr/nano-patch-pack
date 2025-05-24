@@ -77,6 +77,9 @@ def enable_nonsac(enable_remove_add=True):
 
             partitioners.get_default_op_list = remove_add(partitioners.get_default_op_list)
 
+# enable torch.compile memory consumption optimization
+enable_nonsac()
+
 def patch(model):
     # disable unnecessary kv cache
     if model.config.use_cache:
@@ -90,9 +93,5 @@ def patch(model):
     model.model.forward = wrap(model.model.forward)
 
     # enable torch.compile
-    try:
-        enable_nonsac()
-    except Exception as e:
-        print("enable error", repr(e), flush=True)
     for layer in model.model.layers:
         layer.forward = torch.compile(layer.forward, dynamic=True)
